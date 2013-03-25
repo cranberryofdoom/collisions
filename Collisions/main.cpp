@@ -9,15 +9,15 @@
 #define window_height 1000
 #define gravity 0.5
 
+
 // typedef simplifies declarations for pointer types
 
 // TVector has a x, y and z float
 typedef struct {
-    float x;
-    float y;
-    float z;
-}
-TVector;
+    double x;
+    double y;
+    double z;
+}TVector;
 
 // TObject3D has position and velocity TVectors
 typedef struct {
@@ -25,15 +25,15 @@ typedef struct {
     TVector velocity;
 }TObject3D;
 
-int         posmax = 5;
-int         posmin = -5;
+int         posmax = 20;
+int         posmin = -20;
 int         velmax = 5;
 int         velmin = -5;
 char *      theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 10;
+int         numballs = 50;
 TObject3D * balls = new TObject3D[numballs];
 
 
@@ -41,16 +41,23 @@ TObject3D * balls = new TObject3D[numballs];
 const GLuint ANIMATION_DELAY = 40;
 
 // Main loop
-GLuint timeGetTime()
-{
+GLuint timeGetTime() {
     timeval time;
     gettimeofday(&time, NULL);
     return GLuint(time.tv_sec * 1000 + time.tv_usec / 1000);
 }
 
-void fall(float dt){
+void initialize() {
     for (int i = 0; i < numballs; i++) {
-        float newdt = dt / 100;
+        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
+        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+    }
+    oldTime = timeGetTime();
+}
+
+void fall(double dt) {
+    for (int i = 0; i < numballs; i++) {
+        double newdt = dt / 100;
         balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
         balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
         balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
@@ -58,30 +65,37 @@ void fall(float dt){
     }
 }
 
-void bounce(){
+void bounce() {
     for (int i = 0; i < numballs; i++) {
-    if (balls[i].position.y < -window_height/20 + 15 || balls[i].position.y > window_height/20 - 15) {
-        balls[i].velocity.y = -balls[i].velocity.y;
-    }
-    if (balls[i].position.x < -window_width/20 + 15 || balls[i].position.x > window_width/20 - 15) {
-        balls[i].velocity.x = -balls[i].velocity.x;
-    }
-    if (balls[i].position.z < 0 || balls[i].position.z > 30) {
-        balls[i].velocity.z = -balls[i].velocity.z;
-    }
+        if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
+            balls[i].velocity.y = -balls[i].velocity.y;
+        }
+        if (balls[i].position.x <= -window_width/20 + 15 || balls[i].position.x >= window_width/20 - 15) {
+            balls[i].velocity.x = -balls[i].velocity.x;
+        }
+        if (balls[i].position.z <= -50 || balls[i].position.z >= 30) {
+            balls[i].velocity.z = -balls[i].velocity.z;
+        }
     }
 }
 
-
+//int collision() {
+//    for (int i = 0; i < numballs; i++) {
+//        for (int j = i + 1; j < numballs; j++) {
+//            <#statements#>
+//        }
+//    }
+//}
 void makeball(TObject3D ball) {
     // Draw a sphere
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
-    glutSolidSphere(2, 30, 30);
+    glutSolidSphere(1, 30, 30);
     glPopMatrix();
 }
 
 void display() {
+    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // Load identity matrix
@@ -96,7 +110,8 @@ void display() {
     GLfloat light_ambient[] = {0.2, 0.2, 0.2, 1.0};
     GLfloat light_position[] = {-1.0, 1.0, -1.0, 0.0};
     glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
-    glLightfv(GL_LIGHT0, GL_POSITION, light_position);    
+    glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+    
     
     for (int i = 0; i < numballs; i++) {
         makeball(balls[i]);
@@ -106,16 +121,25 @@ void display() {
     glutSwapBuffers();
 }
 
+void processNormalKeys(unsigned char key, int x, int y) {
+}
 
-void idle ()
-{
+void processSpecialKeys(int key, int x, int y) {
+	switch(key) {
+		case GLUT_KEY_UP :
+            break;
+	}
+}
+
+void idle () {
     if (isAnimating)
     {
         currentTime = timeGetTime();
         if ((currentTime - oldTime) > ANIMATION_DELAY) {
-                // move the balls
-                fall(currentTime - oldTime);
-                bounce();
+            // move the balls
+            fall(currentTime - oldTime);
+            bounce();
+//            boundary();
             // compute the frame rate
             oldTime = currentTime;
         }
@@ -126,33 +150,34 @@ void idle ()
     
 }
 
-
 // Initialze OpenGL perspective matrix
 void GL_Setup(int width, int height) {
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glEnable(GL_DEPTH_TEST);
-    gluPerspective(60, (float) width / height, 1, 100);
+    glViewport(0, 0, window_width, window_height);
+    gluPerspective(45, (float) width / height, 1, 1000);
     glMatrixMode(GL_MODELVIEW);
 }
 
 // Initialize GLUT and start main loop
 int main(int argc, char** argv) {
-    for (int i = 0; i < numballs; i++) {
-        balls[i].position = {static_cast<float>(rand() % (posmax - posmin) + posmin), static_cast<float>(rand() % (posmax - posmin) + posmin), static_cast<float>(rand() % (posmax - posmin) + posmin)};
-        balls[i].velocity = {static_cast<float>(rand() % (velmax - velmin) + velmin), static_cast<float>(rand() % (velmax - velmin) + velmin), static_cast<float>(rand() % (velmax - velmin) + velmin)};
-    }
-    oldTime = timeGetTime();
+    
+    // Set up initial positions and velocities for each ball
+    initialize();
+    
     glutInit(&argc, argv);
     glutInitWindowSize(window_width, window_height);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
     glutCreateWindow("Falling Ball");
+    
     glutDisplayFunc(display);
     glutIdleFunc(idle);
+    
     GL_Setup(window_width, window_height);
+    
+    glutKeyboardFunc(processNormalKeys);
+	glutSpecialFunc(processSpecialKeys);
+    
     glutMainLoop();
 }
-
-//for (int i = 0; i < numballs; i++) {
-//    <#statements#>
-//}
