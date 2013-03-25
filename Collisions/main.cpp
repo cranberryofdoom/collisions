@@ -25,6 +25,10 @@ typedef struct {
     TVector velocity;
 }TObject3D;
 
+int         posmax = 5;
+int         posmin = -5;
+int         velmax = 5;
+int         velmin = -5;
 char *      theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
@@ -48,7 +52,6 @@ void fall(float dt){
     for (int i = 0; i < numballs; i++) {
         float newdt = dt / 100;
         balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
-        std::cout << balls[i].velocity.y << std::endl;
         balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
         balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
         balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
@@ -57,13 +60,13 @@ void fall(float dt){
 
 void bounce(){
     for (int i = 0; i < numballs; i++) {
-    if (balls[i].position.y < -window_height/20 + 10 || balls[i].position.y > window_height/20 - 10) {
+    if (balls[i].position.y < -window_height/20 + 15 || balls[i].position.y > window_height/20 - 15) {
         balls[i].velocity.y = -balls[i].velocity.y;
     }
-    if (balls[i].position.x < -window_width/20 + 10 || balls[i].position.x > window_width/20 - 10) {
+    if (balls[i].position.x < -window_width/20 + 15 || balls[i].position.x > window_width/20 - 15) {
         balls[i].velocity.x = -balls[i].velocity.x;
     }
-    if (balls[i].position.z < 0 || balls[i].position.z > window_width/40) {
+    if (balls[i].position.z < 0 || balls[i].position.z > 30) {
         balls[i].velocity.z = -balls[i].velocity.z;
     }
     }
@@ -136,8 +139,8 @@ void GL_Setup(int width, int height) {
 // Initialize GLUT and start main loop
 int main(int argc, char** argv) {
     for (int i = 0; i < numballs; i++) {
-        balls[i].position = {static_cast<float>(rand() % (30 - (-30)) + (-30)), static_cast<float>(rand() % (30 - (-30)) + (-30)), static_cast<float>(rand() % (30 - (-30)) + (-30))};
-        balls[i].velocity = {static_cast<float>(rand() % (3 - (-3)) + (-3)), static_cast<float>(rand() % (3 - (-3)) + (-3)), static_cast<float>(rand() % (3 - (-3)) + (-3))};
+        balls[i].position = {static_cast<float>(rand() % (posmax - posmin) + posmin), static_cast<float>(rand() % (posmax - posmin) + posmin), static_cast<float>(rand() % (posmax - posmin) + posmin)};
+        balls[i].velocity = {static_cast<float>(rand() % (velmax - velmin) + velmin), static_cast<float>(rand() % (velmax - velmin) + velmin), static_cast<float>(rand() % (velmax - velmin) + velmin)};
     }
     oldTime = timeGetTime();
     glutInit(&argc, argv);
