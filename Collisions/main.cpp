@@ -7,7 +7,7 @@
 #include <iostream>
 #define window_width  1000
 #define window_height 1000
-#define gravity 0.1
+#define gravity 0.5
 
 // typedef simplifies declarations for pointer types
 
@@ -29,7 +29,7 @@ char *      theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 2;
+int         numballs = 10;
 TObject3D * balls = new TObject3D[numballs];
 
 
@@ -44,23 +44,28 @@ GLuint timeGetTime()
     return GLuint(time.tv_sec * 1000 + time.tv_usec / 1000);
 }
 
-void fall(float dt, TObject3D ball){
-    float newdt = dt / 100;
-    ball.velocity.y = ball.velocity.y - gravity * newdt;
-    ball.position.x = ball.position.x + ball.velocity.x * newdt;
-    ball.position.y = ball.position.y + ball.velocity.y * newdt;
-    ball.position.z = ball.position.z + ball.velocity.z * newdt;
+void fall(float dt){
+    for (int i = 0; i < numballs; i++) {
+        float newdt = dt / 100;
+        balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
+        std::cout << balls[i].velocity.y << std::endl;
+        balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
+        balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
+        balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
+    }
 }
 
-void bounce(TObject3D ball){
-    if (ball.position.y < -window_height/20 + 10 || ball.position.y > window_height/20 - 10) {
-        ball.velocity.y = -ball.velocity.y;
+void bounce(){
+    for (int i = 0; i < numballs; i++) {
+    if (balls[i].position.y < -window_height/20 + 10 || balls[i].position.y > window_height/20 - 10) {
+        balls[i].velocity.y = -balls[i].velocity.y;
     }
-    if (ball.position.x < -window_width/20 + 10 || ball.position.x > window_width/20 - 10) {
-        ball.velocity.x = -ball.velocity.x;
+    if (balls[i].position.x < -window_width/20 + 10 || balls[i].position.x > window_width/20 - 10) {
+        balls[i].velocity.x = -balls[i].velocity.x;
     }
-    if (ball.position.z < 0 || ball.position.z > window_width/40) {
-        ball.velocity.z = -ball.velocity.z;
+    if (balls[i].position.z < 0 || balls[i].position.z > window_width/40) {
+        balls[i].velocity.z = -balls[i].velocity.z;
+    }
     }
 }
 
@@ -93,7 +98,7 @@ void display() {
     for (int i = 0; i < numballs; i++) {
         makeball(balls[i]);
     }
-
+    
     // Swap buffers (color buffers, makes previous render visible)
     glutSwapBuffers();
 }
@@ -105,12 +110,9 @@ void idle ()
     {
         currentTime = timeGetTime();
         if ((currentTime - oldTime) > ANIMATION_DELAY) {
-            // move the balls
-            for (int i = 0; i < numballs; i++) {
-                bounce(balls[i]);
-                fall(currentTime - oldTime, balls[i]);
-            }
-            
+                // move the balls
+                fall(currentTime - oldTime);
+                bounce();
             // compute the frame rate
             oldTime = currentTime;
         }
@@ -133,8 +135,10 @@ void GL_Setup(int width, int height) {
 
 // Initialize GLUT and start main loop
 int main(int argc, char** argv) {
-    balls[0].position = {5.0, 6.0, 7.0};
-    balls[0].velocity = {4.0, 6.0, 7.0};
+    for (int i = 0; i < numballs; i++) {
+        balls[i].position = {static_cast<float>(rand() % (30 - (-30)) + (-30)), static_cast<float>(rand() % (30 - (-30)) + (-30)), static_cast<float>(rand() % (30 - (-30)) + (-30))};
+        balls[i].velocity = {static_cast<float>(rand() % (3 - (-3)) + (-3)), static_cast<float>(rand() % (3 - (-3)) + (-3)), static_cast<float>(rand() % (3 - (-3)) + (-3))};
+    }
     oldTime = timeGetTime();
     glutInit(&argc, argv);
     glutInitWindowSize(window_width, window_height);
@@ -145,3 +149,7 @@ int main(int argc, char** argv) {
     GL_Setup(window_width, window_height);
     glutMainLoop();
 }
+
+//for (int i = 0; i < numballs; i++) {
+//    <#statements#>
+//}
