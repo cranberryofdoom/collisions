@@ -21,7 +21,9 @@ typedef struct {
 
 // TObject3D has position and velocity TVectors
 typedef struct {
+    TVector oldposition;
     TVector position;
+    TVector oldvelocity;
     TVector velocity;
 }TObject3D;
 
@@ -33,7 +35,7 @@ char *      theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 50;
+int         numballs = 1;
 TObject3D * balls = new TObject3D[numballs];
 
 
@@ -49,8 +51,10 @@ GLuint timeGetTime() {
 
 void initialize() {
     for (int i = 0; i < numballs; i++) {
-        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
-        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+//        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
+//        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+        balls[i].position = {0.0,0.0,0.0};
+        balls[i].velocity = {0.0,0.0,0.0};
     }
     oldTime = timeGetTime();
 }
@@ -58,18 +62,28 @@ void initialize() {
 void fall(double dt) {
     for (int i = 0; i < numballs; i++) {
         double newdt = dt / 100;
-        balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
+        double oldvel = balls[i].velocity.y;
         balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
         balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
         balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
+        balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
+        std::cout << std::endl << "time" << newdt << std::endl;
+        std::cout << "velocity " << balls[i].velocity.y << std::endl;
+        std::cout << "position " << balls[i].position.y << std::endl;
+        if (oldvel < 0) {
+            std::cout << "I'M FALLING" << std::endl;
+        }
     }
 }
 
 void bounce() {
     for (int i = 0; i < numballs; i++) {
+        // -window_height/20 + 15 = -35
         if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
             balls[i].velocity.y = -balls[i].velocity.y;
+            std::cout << std:: endl << "FUCK IT TURNED AROUND" << std::endl;
         }
+        std::cout << "turnaround velocity " << balls[i].velocity.y << std::endl;
         if (balls[i].position.x <= -window_width/20 + 15 || balls[i].position.x >= window_width/20 - 15) {
             balls[i].velocity.x = -balls[i].velocity.x;
         }
@@ -86,6 +100,7 @@ void bounce() {
 //        }
 //    }
 //}
+
 void makeball(TObject3D ball) {
     // Draw a sphere
     glPushMatrix();
@@ -132,14 +147,13 @@ void processSpecialKeys(int key, int x, int y) {
 }
 
 void idle () {
-    if (isAnimating)
-    {
+    if (isAnimating) {
         currentTime = timeGetTime();
         if ((currentTime - oldTime) > ANIMATION_DELAY) {
             // move the balls
             fall(currentTime - oldTime);
             bounce();
-//            boundary();
+//            collision();
             // compute the frame rate
             oldTime = currentTime;
         }
