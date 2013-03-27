@@ -37,7 +37,7 @@ char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 100;
+int         numballs = 2;
 TObject3D   *balls = new TObject3D[numballs];
 
 
@@ -52,14 +52,14 @@ GLuint timeGetTime() {
 }
 
 void initialize() {
-    for (int i = 0; i < numballs; i++) {
-        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
-        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
-    }
-//    balls[0].position = {0.0, 0.0, 0.0};
-//    balls[0].velocity = {0.0, 0.0, 0.0};
-//    balls[1].position = {0.0, 10.0, 0.0};
-//    balls[1].velocity = {0.0, 2.0, 0.0};
+//    for (int i = 0; i < numballs; i++) {
+//        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
+//        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+//    }
+    balls[0].position = {0.0, -30.0, 0.0};
+    balls[0].velocity = {0.0, -5.0, 0.0};
+    balls[1].position = {0.0, 10.0, 0.0};
+    balls[1].velocity = {0.0, 1.0, 0.0};
     oldTime = timeGetTime();
 }
 
@@ -116,7 +116,6 @@ TVector crossProduct(TVector a, TVector b) {
 bool collisionTest(int i, int j) {
     // difference position vectors
     TVector * deltapos = new TVector;
-    
     deltapos->x = balls[i].position.x - balls[j].position.x;
     deltapos->y = balls[i].position.y - balls[j].position.y;
     deltapos->z = balls[i].position.z - balls[j].position.z;
@@ -127,11 +126,12 @@ bool collisionTest(int i, int j) {
     deltavel->y = balls[i].velocity.y - balls[j].velocity.y;
     deltavel->z = balls[i].velocity.z - balls[j].velocity.z;
     
-    // double the radius
+    // double the radius, then square it
     double r = radius * 2;
+    r *= r;
     
     // dot product of position vectors, if it is negative they already overlap
-    double c = dotProduct(*deltapos, *deltapos) - (r * r);
+    double c = dotProduct(*deltapos, *deltapos) - r / 5;
     if (c < 0) {
         return true;
     }
@@ -152,19 +152,19 @@ bool collisionTest(int i, int j) {
     
     // if d is negative, there are no real roots and no collisions
     double d = b * b - a * c;
-    return (d < 0);
+    return (d > 0);
 }
 
 void collision() {
     for (int i = 0; i < numballs; i++) {
         for (int j = i + 1; j < numballs; j++) {
             if (collisionTest(i, j)) {
-                balls[i].velocity.x = balls[j].velocity.x;
-                balls[j].velocity.x = balls[i].velocity.x;
-                balls[i].velocity.y = balls[j].velocity.y;
-                balls[j].velocity.y = balls[i].velocity.y;
-                balls[i].velocity.z = balls[j].velocity.z;
-                balls[j].velocity.z = balls[i].velocity.z;
+                balls[i].velocity.x = balls[j].oldvelocity.x;
+                balls[j].velocity.x = balls[i].oldvelocity.x;
+                balls[i].velocity.y = balls[j].oldvelocity.y;
+                balls[j].velocity.y = balls[i].oldvelocity.y;
+                balls[i].velocity.z = balls[j].oldvelocity.z;
+                balls[j].velocity.z = balls[i].oldvelocity.z;
                 std::cout << "I'M HIT" << std::endl;
             }
         }
@@ -223,7 +223,7 @@ void idle () {
             // move the balls
             fall(dt);
             bounce();
-//            collision();
+            collision();
             // compute the frame rate
             oldTime = currentTime;
         }
