@@ -27,16 +27,18 @@ typedef struct {
     TVector velocity;
 }TObject3D;
 
+double      radius = 1;
+double      dt = 50;
 int         posmax = 20;
 int         posmin = -20;
 int         velmax = 5;
 int         velmin = -5;
-char *      theProgramTitle;
+char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 1;
-TObject3D * balls = new TObject3D[numballs];
+int         numballs = 100;
+TObject3D   *balls = new TObject3D[numballs];
 
 
 // render delay 100 milliseconds
@@ -51,39 +53,43 @@ GLuint timeGetTime() {
 
 void initialize() {
     for (int i = 0; i < numballs; i++) {
-//        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
-//        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
-        balls[i].position = {0.0,0.0,0.0};
-        balls[i].velocity = {0.0,0.0,0.0};
+        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
+        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
     }
+//    balls[0].position = {0.0, 0.0, 0.0};
+//    balls[0].velocity = {0.0, 0.0, 0.0};
+//    balls[1].position = {0.0, 10.0, 0.0};
+//    balls[1].velocity = {0.0, 2.0, 0.0};
     oldTime = timeGetTime();
 }
 
 void fall(double dt) {
     for (int i = 0; i < numballs; i++) {
         double newdt = dt / 100;
-        double oldvel = balls[i].velocity.y;
+        
+        // store old velocity
+        balls[i].oldvelocity.y = balls[i].velocity.y;
+        
+        // store old positions
+        balls[i].oldposition.x = balls[i].position.x;
+        balls[i].oldposition.y = balls[i].position.y;
+        balls[i].oldposition.z = balls[i].position.z;
+        
+        // update positions
         balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
         balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
         balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
+        
+        // update velocity
         balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
-        std::cout << std::endl << "time" << newdt << std::endl;
-        std::cout << "velocity " << balls[i].velocity.y << std::endl;
-        std::cout << "position " << balls[i].position.y << std::endl;
-        if (oldvel < 0) {
-            std::cout << "I'M FALLING" << std::endl;
-        }
     }
 }
 
 void bounce() {
     for (int i = 0; i < numballs; i++) {
-        // -window_height/20 + 15 = -35
         if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
-            balls[i].velocity.y = -balls[i].velocity.y;
-            std::cout << std:: endl << "FUCK IT TURNED AROUND" << std::endl;
+            balls[i].velocity.y = -balls[i].oldvelocity.y;
         }
-        std::cout << "turnaround velocity " << balls[i].velocity.y << std::endl;
         if (balls[i].position.x <= -window_width/20 + 15 || balls[i].position.x >= window_width/20 - 15) {
             balls[i].velocity.x = -balls[i].velocity.x;
         }
@@ -93,19 +99,83 @@ void bounce() {
     }
 }
 
-//int collision() {
-//    for (int i = 0; i < numballs; i++) {
-//        for (int j = i + 1; j < numballs; j++) {
-//            <#statements#>
-//        }
-//    }
-//}
+double dotProduct(TVector a, TVector b){
+    double dot = (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    return dot;
+    
+}
+
+TVector crossProduct(TVector a, TVector b) {
+    TVector *cross = new TVector;
+    cross->x = (a.y * b.z) - (a.z * b.y);
+    cross->y = (a.z * b.x) - (a.x * b.z);
+    cross->z = (a.x * b.y) - (a.y * b.x);
+    return *cross;
+}
+
+bool collisionTest(int i, int j) {
+    // difference position vectors
+    TVector * deltapos = new TVector;
+    
+    deltapos->x = balls[i].position.x - balls[j].position.x;
+    deltapos->y = balls[i].position.y - balls[j].position.y;
+    deltapos->z = balls[i].position.z - balls[j].position.z;
+    
+    // difference velocity vectors
+    TVector * deltavel = new TVector;
+    deltavel->x = balls[i].velocity.x - balls[j].velocity.x;
+    deltavel->y = balls[i].velocity.y - balls[j].velocity.y;
+    deltavel->z = balls[i].velocity.z - balls[j].velocity.z;
+    
+    // double the radius
+    double r = radius * 2;
+    
+    // dot product of position vectors, if it is negative they already overlap
+    double c = dotProduct(*deltapos, *deltapos) - (r * r);
+    if (c < 0) {
+        return true;
+    }
+    
+    // dot product of velocity vectors
+    double a = dotProduct(*deltavel, *deltavel);
+    
+    // dot product of velocity vector by position vector, if it is 0 or positive they are not moving towards each other
+    double b = dotProduct(*deltavel, *deltapos);
+    if (b >= 0) {
+        return false;
+    }
+    
+    // through Viete's theorem, check if spheres can intersect within 1 frame
+    if ((a + b) <= 0 && (a + 2 * b + c) >= 0) {
+        return false;
+    }
+    
+    // if d is negative, there are no real roots and no collisions
+    double d = b * b - a * c;
+    return (d < 0);
+}
+
+void collision() {
+    for (int i = 0; i < numballs; i++) {
+        for (int j = i + 1; j < numballs; j++) {
+            if (collisionTest(i, j)) {
+                balls[i].velocity.x = balls[j].velocity.x;
+                balls[j].velocity.x = balls[i].velocity.x;
+                balls[i].velocity.y = balls[j].velocity.y;
+                balls[j].velocity.y = balls[i].velocity.y;
+                balls[i].velocity.z = balls[j].velocity.z;
+                balls[j].velocity.z = balls[i].velocity.z;
+                std::cout << "I'M HIT" << std::endl;
+            }
+        }
+    }
+}
 
 void makeball(TObject3D ball) {
     // Draw a sphere
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
-    glutSolidSphere(1, 30, 30);
+    glutSolidSphere(radius, 30, 30);
     glPopMatrix();
 }
 
@@ -151,7 +221,7 @@ void idle () {
         currentTime = timeGetTime();
         if ((currentTime - oldTime) > ANIMATION_DELAY) {
             // move the balls
-            fall(currentTime - oldTime);
+            fall(dt);
             bounce();
 //            collision();
             // compute the frame rate
