@@ -27,7 +27,7 @@ void draw() {
  
   for (int i=0; i<n; i++) {
     b[i].move();
-    edgeCollide(b[i]);
+    edgeCollide(b[i]); //can't tell if this is checking if it collides, or calling it to collide with the wall
   }
  
   ballCollide();
