@@ -7,8 +7,6 @@
 #include <iostream>
 #define window_width  1000
 #define window_height 1000
-#define gravity 0.5
-
 
 // typedef simplifies declarations for pointer types
 
@@ -27,8 +25,9 @@ typedef struct {
     TVector velocity;
 }TObject3D;
 
+double      g = 0.5;
 double      radius = 1;
-double      dt = 50;
+double      dt = 25;
 int         posmax = 20;
 int         posmin = -20;
 int         velmax = 5;
@@ -37,12 +36,12 @@ char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 2;
+int         numballs = 200;
 TObject3D   *balls = new TObject3D[numballs];
 
 
 // render delay 100 milliseconds
-const GLuint ANIMATION_DELAY = 40;
+const GLuint ANIMATION_DELAY = 25;
 
 // Main loop
 GLuint timeGetTime() {
@@ -52,23 +51,20 @@ GLuint timeGetTime() {
 }
 
 void initialize() {
-//    for (int i = 0; i < numballs; i++) {
-//        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
-//        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
-//    }
-    balls[0].position = {0.0, -30.0, 0.0};
-    balls[0].velocity = {0.0, -5.0, 0.0};
-    balls[1].position = {0.0, 10.0, 0.0};
-    balls[1].velocity = {0.0, 1.0, 0.0};
+    for (int i = 0; i < numballs; i++) {
+        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
+        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+    }
+//    balls[0].position = {0.0, 0.0, 0.0};
+//    balls[0].velocity = {1.0, 0.0, 0.0};
+//    balls[1].position = {5.0, 0.0, 0.0};
+//    balls[1].velocity = {3.0, 0.0, 0.0};
     oldTime = timeGetTime();
 }
 
-void fall(double dt) {
+void move(double dt) {
     for (int i = 0; i < numballs; i++) {
         double newdt = dt / 100;
-        
-        // store old velocity
-        balls[i].oldvelocity.y = balls[i].velocity.y;
         
         // store old positions
         balls[i].oldposition.x = balls[i].position.x;
@@ -79,13 +75,29 @@ void fall(double dt) {
         balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
         balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
         balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
-        
-        // update velocity
-        balls[i].velocity.y = balls[i].velocity.y - gravity * newdt;
     }
 }
 
-void bounce() {
+void gravity(double dt) {
+    for (int i = 0; i < numballs; i++) {
+        double newdt = dt / 100;
+        
+        // store old y velocity
+        balls[i].oldvelocity.y = balls[i].velocity.y;
+        
+        // update y velocity using gravity
+        balls[i].velocity.y = balls[i].oldvelocity.y - g * newdt;
+        
+//        std::cout << "old iposition " << balls[0].oldposition.y << std::endl;
+//        std::cout << "old jposition " << balls[1].oldposition.y << std::endl;
+//        std::cout << "iposition " << balls[0].position.y << std::endl;
+//        std::cout << "jposition " << balls[1].position.y << std::endl;
+//        std::cout << "ivelocity " << balls[0].velocity.y << std::endl;
+//        std::cout << "jvelocity " << balls[1].velocity.y << std::endl << std::endl;
+    }
+}
+
+void edge() {
     for (int i = 0; i < numballs; i++) {
         if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
             balls[i].velocity.y = -balls[i].oldvelocity.y;
@@ -131,7 +143,7 @@ bool collisionTest(int i, int j) {
     r *= r;
     
     // dot product of position vectors, if it is negative they already overlap
-    double c = dotProduct(*deltapos, *deltapos) - r / 5;
+    double c = dotProduct(*deltapos, *deltapos) - r;
     if (c < 0) {
         return true;
     }
@@ -155,17 +167,30 @@ bool collisionTest(int i, int j) {
     return (d > 0);
 }
 
-void collision() {
+void collide() {
     for (int i = 0; i < numballs; i++) {
         for (int j = i + 1; j < numballs; j++) {
             if (collisionTest(i, j)) {
+                // store old velocities of x and z because they've never been stored before
+                balls[i].oldvelocity.x = balls[i].velocity.x;
+                balls[j].oldvelocity.x = balls[j].velocity.x;
+                balls[i].oldvelocity.z = balls[i].velocity.z;
+                balls[j].oldvelocity.z = balls[j].velocity.z;
+                
+                // update the new velocities through switching them
                 balls[i].velocity.x = balls[j].oldvelocity.x;
                 balls[j].velocity.x = balls[i].oldvelocity.x;
                 balls[i].velocity.y = balls[j].oldvelocity.y;
                 balls[j].velocity.y = balls[i].oldvelocity.y;
                 balls[i].velocity.z = balls[j].oldvelocity.z;
                 balls[j].velocity.z = balls[i].oldvelocity.z;
-                std::cout << "I'M HIT" << std::endl;
+                
+//                std::cout << "I'M HIT" << std::endl;
+//                std::cout << "iposition " << balls[i].position.y << std::endl;
+//                std::cout << "jposition " << balls[j].position.y << std::endl;
+//                std::cout << "ivelocity " << balls[i].velocity.y << std::endl;
+//                std::cout << "jvelocity " << balls[j].velocity.y << std::endl << std::endl;
+
             }
         }
     }
@@ -221,9 +246,10 @@ void idle () {
         currentTime = timeGetTime();
         if ((currentTime - oldTime) > ANIMATION_DELAY) {
             // move the balls
-            fall(dt);
-            bounce();
-            collision();
+            edge();
+            move(dt);
+            collide();
+            gravity(dt);
             // compute the frame rate
             oldTime = currentTime;
         }
