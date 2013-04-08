@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <math.h>
 #define window_width  1000
 #define window_height 1000
 
@@ -23,20 +24,34 @@ typedef struct {
     TVector position;
     TVector oldvelocity;
     TVector velocity;
+    TVector equilib;
+    bool    spring;
+    int     relobj;
+    double  collidetime;
 }TObject3D;
 
+// angle of rotation for camera
+float       angle = 0;
+// actual vector representing the camera's direction
+float       lx = 0.0f, lz = -1.0f;
+// XZ position of the camera
+float       camx = 0.0f, camz = 75.0f;
+
+double      b = 2;
+double      v = 1;
+double      k = 2;
 double      g = 0.5;
 double      radius = 1;
 double      dt = 25;
-int         posmax = 20;
-int         posmin = -20;
-int         velmax = 5;
-int         velmin = -5;
+int         posmax = window_width/20 - 20;
+int         posmin = -window_width/20 + 20;
+int         velmax = 10;
+int         velmin = -10;
 char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 200;
+int         numballs = 500;
 TObject3D   *balls = new TObject3D[numballs];
 
 
@@ -54,6 +69,7 @@ void initialize() {
     for (int i = 0; i < numballs; i++) {
         balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
         balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+        balls[i].spring = false;
     }
 //    balls[0].position = {0.0, 0.0, 0.0};
 //    balls[0].velocity = {1.0, 0.0, 0.0};
@@ -72,9 +88,46 @@ void move(double dt) {
         balls[i].oldposition.z = balls[i].position.z;
         
         // update positions
-        balls[i].position.x = balls[i].position.x + balls[i].velocity.x * newdt;
-        balls[i].position.y = balls[i].position.y + balls[i].velocity.y * newdt;
-        balls[i].position.z = balls[i].position.z + balls[i].velocity.z * newdt;
+        balls[i].position.x = balls[i].oldposition.x + balls[i].velocity.x * newdt;
+        balls[i].position.y = balls[i].oldposition.y + balls[i].velocity.y * newdt;
+        balls[i].position.z = balls[i].oldposition.z + balls[i].velocity.z * newdt;
+    }
+}
+
+void sticky(double dt) {
+    double newdt = dt / 100;
+    
+
+    for (int i = 0; i < numballs; i++) {
+        
+        // get the displacement from equilibrium
+        double dx = balls[i].oldposition.x - balls[i].equilib.x;
+        double dy = balls[i].oldposition.y - balls[i].equilib.y;
+        double dz = balls[i].oldposition.z - balls[i].equilib.z;
+        
+        // get relative velocity between the sticky objects
+        double dvx = balls[i].velocity.x - balls[balls[i].relobj].velocity.x;
+        double dvy = balls[i].velocity.y - balls[balls[i].relobj].velocity.y;
+        double dvz = balls[i].velocity.z - balls[balls[i].relobj].velocity.z;
+
+        // if the the balls have to act as a spring
+        if (balls[i].spring == true) {
+            
+            // store old velocities
+            balls[i].oldvelocity.x = balls[i].velocity.x;
+            balls[i].oldvelocity.y = balls[i].velocity.y;
+            balls[i].oldvelocity.z = balls[i].velocity.z;
+            
+            // update velocities using spring force
+            balls[i].velocity.x = balls[i].oldvelocity.x - k * dx * newdt - b * dvx * newdt;
+            balls[i].velocity.y = balls[i].oldvelocity.y - k * dy * newdt - b * dvy * newdt;
+            balls[i].velocity.z = balls[i].oldvelocity.z - k * dz * newdt - b * dvz * newdt;
+            
+            // if the balls have gone over a certain sticky force field
+            if (dx > v || dy > v || dz > v) {
+                balls[i].spring = false;
+            }
+        }
     }
 }
 
@@ -87,13 +140,6 @@ void gravity(double dt) {
         
         // update y velocity using gravity
         balls[i].velocity.y = balls[i].oldvelocity.y - g * newdt;
-        
-//        std::cout << "old iposition " << balls[0].oldposition.y << std::endl;
-//        std::cout << "old jposition " << balls[1].oldposition.y << std::endl;
-//        std::cout << "iposition " << balls[0].position.y << std::endl;
-//        std::cout << "jposition " << balls[1].position.y << std::endl;
-//        std::cout << "ivelocity " << balls[0].velocity.y << std::endl;
-//        std::cout << "jvelocity " << balls[1].velocity.y << std::endl << std::endl;
     }
 }
 
@@ -102,10 +148,10 @@ void edge() {
         if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
             balls[i].velocity.y = -balls[i].oldvelocity.y;
         }
-        if (balls[i].position.x <= -window_width/20 + 15 || balls[i].position.x >= window_width/20 - 15) {
+        if (balls[i].position.x <= -window_width/10 || balls[i].position.x >= window_width/10) {
             balls[i].velocity.x = -balls[i].velocity.x;
         }
-        if (balls[i].position.z <= -50 || balls[i].position.z >= 30) {
+        if (balls[i].position.z <= -180 || balls[i].position.z >= 180) {
             balls[i].velocity.z = -balls[i].velocity.z;
         }
     }
@@ -164,6 +210,11 @@ bool collisionTest(int i, int j) {
     
     // if d is negative, there are no real roots and no collisions
     double d = b * b - a * c;
+    
+    // figure out the time when the ball collided
+    balls[i].collidetime = (-b - sqrt(d)) / a;
+    balls[j].collidetime = (-b - sqrt(d)) / a;
+    
     return (d > 0);
 }
 
@@ -171,6 +222,22 @@ void collide() {
     for (int i = 0; i < numballs; i++) {
         for (int j = i + 1; j < numballs; j++) {
             if (collisionTest(i, j)) {
+                // move the two balls to their intersecting point
+                balls[i].position.x = balls[i].oldposition.x + balls[i].velocity.x * balls[i].collidetime;
+                balls[i].position.y = balls[i].oldposition.y + balls[i].velocity.y * balls[i].collidetime;
+                balls[i].position.z = balls[i].oldposition.z + balls[i].velocity.z * balls[i].collidetime;
+
+                balls[j].position.x = balls[j].oldposition.x + balls[j].velocity.x * balls[j].collidetime;
+                balls[j].position.y = balls[j].oldposition.y + balls[j].velocity.y * balls[j].collidetime;
+                balls[j].position.z = balls[j].oldposition.z + balls[j].velocity.z * balls[j].collidetime;
+                
+                // set the two balls' equlibrium point to their intersecting point
+                balls[i].equilib.x = balls[i].position.x;
+                balls[i].equilib.y = balls[i].position.y;
+                balls[i].equilib.z = balls[i].position.z;
+                
+                balls[j].equilib = {balls[j].position.x, balls[j].position.y, balls[j].position.z};
+                
                 // store old velocities of x and z because they've never been stored before
                 balls[i].oldvelocity.x = balls[i].velocity.x;
                 balls[j].oldvelocity.x = balls[j].velocity.x;
@@ -185,12 +252,13 @@ void collide() {
                 balls[i].velocity.z = balls[j].oldvelocity.z;
                 balls[j].velocity.z = balls[i].oldvelocity.z;
                 
-//                std::cout << "I'M HIT" << std::endl;
-//                std::cout << "iposition " << balls[i].position.y << std::endl;
-//                std::cout << "jposition " << balls[j].position.y << std::endl;
-//                std::cout << "ivelocity " << balls[i].velocity.y << std::endl;
-//                std::cout << "jvelocity " << balls[j].velocity.y << std::endl << std::endl;
-
+                // now turn on the sticky force for both objects
+                balls[i].spring = true;
+                balls[j].spring = true;
+                
+                // identify the other ball that it's sticky to
+                balls[i].relobj = j;
+                balls[j].relobj = i;
             }
         }
     }
@@ -198,6 +266,16 @@ void collide() {
 
 void makeball(TObject3D ball) {
     // Draw a sphere
+    if (ball.velocity.x < 0) {
+        glColor3f(-ball.velocity.x/5, ball.velocity.y/5, ball.velocity.z/5);
+    }
+    if (ball.velocity.y < 0) {
+        glColor3f(ball.velocity.x/5, -ball.velocity.y/5, ball.velocity.z/5);
+    }
+    if (ball.velocity.x < 0) {
+        glColor3f(ball.velocity.x/5, ball.velocity.y/5, -ball.velocity.z/5);
+    }
+    glColor3f(ball.velocity.x/5, ball.velocity.y/5, ball.velocity.z/5);
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
     glutSolidSphere(radius, 30, 30);
@@ -205,24 +283,82 @@ void makeball(TObject3D ball) {
 }
 
 void display() {
-    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // Load identity matrix
     glLoadIdentity();
     
-    // Move back
-    glTranslatef(0, 0, -90);
+    glPushMatrix();
+    glutSolidCube(1);
+    glTranslatef(camx, 1.0f, camz);
+    glPopMatrix();
+    
+    gluLookAt(camx,     1.0f,   camz,
+              camx+lx,  1.0f,   camz+lz,
+              0.0f,     1.0f,   0.0f);
     
     // Enable lighting
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
-    GLfloat light_ambient[] = {0.2, 0.2, 0.2, 1.0};
+    glEnable(GL_COLOR_MATERIAL);
+    GLfloat light_ambient[] = {0.1, 0.1, 0.1, 1.0};
     GLfloat light_position[] = {-1.0, 1.0, -1.0, 0.0};
     glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
     glLightfv(GL_LIGHT0, GL_POSITION, light_position);
     
     
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    
+    // front wall
+	glBegin(GL_QUADS);
+    glColor3f(0.9, 0.9, 0.9);
+    glVertex3f(-window_width/10, -window_height/20 + 15, -180.0f);
+    glColor3f(0.9, 0.9, 0.9);
+    glVertex3f(window_width/10, -window_height/20 + 15,  -180.0f);
+    glColor3f(0.5, 0.5, 0.5);
+    glVertex3f(window_width/10, window_height/20 + 15,  -180.0f);
+    glColor3f(0.5, 0.5, 0.5);
+    glVertex3f(-window_width/10, window_height/20 + 15, -180.0f);
+	glEnd();
+    
+    // side wall
+    glBegin(GL_QUADS);
+    glVertex3f(window_width/10, -window_height/20 + 15, -180.0f);
+    glVertex3f(window_width/10, -window_height/20 + 15,  180.0f);
+    glVertex3f(window_width/10, window_height/20 + 15,  180.0f);
+    glVertex3f(window_width/10, window_height/20 + 15, -180.0f);
+	glEnd();
+    
+    // side wall
+    glBegin(GL_QUADS);
+    glVertex3f(-window_width/10, -window_height/20 + 15, -180.0f);
+    glVertex3f(-window_width/10, -window_height/20 + 15,  180.0f);
+    glVertex3f(-window_width/10, window_height/20 + 15,  180.0f);
+    glVertex3f(-window_width/10, window_height/20 + 15, -180.0f);
+	glEnd();
+    
+    // back wall
+    glBegin(GL_QUADS);
+    glColor3f(0.9, 0.9, 0.9);
+    glVertex3f(-window_width/10, -window_height/20 + 15, 180.0f);
+    glColor3f(0.9, 0.9, 0.9);
+    glVertex3f(window_width/10, -window_height/20 + 15,  180.0f);
+    glColor3f(0.5, 0.5, 0.5);
+    glVertex3f(window_width/10, window_height/20 + 15,  180.0f);
+    glColor3f(0.5, 0.5, 0.5);
+    glVertex3f(-window_width/10, window_height/20 + 15, 180.0f);
+	glEnd();
+    
+    // floor
+    glBegin(GL_QUADS);
+    glColor3f(0.2, 0.2, 0.2);
+    glVertex3f(-window_width/10, -window_height/20 + 15, -180.0f);
+    glVertex3f(-window_width/10, -window_height/20 + 15,  180.0f);
+    glVertex3f(window_width/10, -window_height/20 + 15,  180.0f);
+    glVertex3f(window_width/10, -window_height/20 + 15, -180.0f);
+	glEnd();
+    
+    // Make all the specified balls
     for (int i = 0; i < numballs; i++) {
         makeball(balls[i]);
     }
@@ -232,12 +368,35 @@ void display() {
 }
 
 void processNormalKeys(unsigned char key, int x, int y) {
+    switch (key) {
+        case 'g':
+            g = 0;
+            break;
+    }
 }
 
-void processSpecialKeys(int key, int x, int y) {
-	switch(key) {
+void processSpecialKeys(int key, int xx, int yy) {
+    float fraction = 10.0f;
+
+	switch (key) {
+		case GLUT_KEY_LEFT :
+			angle -= 0.1f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break;
+		case GLUT_KEY_RIGHT :
+			angle += 0.1f;
+			lx = sin(angle);
+			lz = -cos(angle);
+			break;
 		case GLUT_KEY_UP :
-            break;
+			camx += lx * fraction;
+			camz += lz * fraction;
+			break;
+		case GLUT_KEY_DOWN :
+			camx -= lx * fraction;
+			camz -= lz * fraction;
+			break;
 	}
 }
 
@@ -250,6 +409,7 @@ void idle () {
             move(dt);
             collide();
             gravity(dt);
+            sticky(dt);
             // compute the frame rate
             oldTime = currentTime;
         }
@@ -262,7 +422,6 @@ void idle () {
 
 // Initialze OpenGL perspective matrix
 void GL_Setup(int width, int height) {
-    glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, window_width, window_height);
