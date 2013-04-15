@@ -23,6 +23,7 @@ typedef struct {
     TVector oldposition;
     TVector position;
     TVector oldvelocity;
+    TVector defvelocity;
     TVector velocity;
     TVector equilib;
     bool    spring;
@@ -31,13 +32,19 @@ typedef struct {
 }TObject3D;
 
 // angle of rotation for camera
-float       angle = 0;
+float       angle = 0.0f;
 // actual vector representing the camera's direction
 float       lx = 0.0f, lz = -1.0f;
 // XZ position of the camera
 float       camx = 0.0f, camz = 75.0f;
 
-double      b = 2;
+// the key states where variables will be zero when no key is being presses
+float deltaAngle = 0.0f;
+float deltaForwardMove = 0;
+float deltaSideMove = 0;
+int xOrigin = -1;
+
+double      b = 5;
 double      v = 1;
 double      k = 2;
 double      g = 0.5;
@@ -51,11 +58,11 @@ char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 500;
+int         numballs = 100;
 TObject3D   *balls = new TObject3D[numballs];
 
 
-// render delay 100 milliseconds
+// render delay 25 milliseconds
 const GLuint ANIMATION_DELAY = 25;
 
 // Main loop
@@ -67,8 +74,16 @@ GLuint timeGetTime() {
 
 void initialize() {
     for (int i = 0; i < numballs; i++) {
-        balls[i].position = {static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin), static_cast<double>(rand() % (posmax - posmin) + posmin)};
-        balls[i].velocity = {static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin), static_cast<double>(rand() % (velmax - velmin) + velmin)};
+        balls[i].position = {
+            static_cast<double>(rand() % (posmax - posmin) + posmin),
+            static_cast<double>(rand() % (posmax - posmin) + posmin),
+            static_cast<double>(rand() % (posmax - posmin) + posmin)
+        };
+        balls[i].velocity = {
+            static_cast<double>(rand() % (velmax - velmin) + velmin),
+            static_cast<double>(rand() % (velmax - velmin) + velmin),
+            static_cast<double>(rand() % (velmax - velmin) + velmin)
+        };
         balls[i].spring = false;
     }
 //    balls[0].position = {0.0, 0.0, 0.0};
@@ -78,19 +93,51 @@ void initialize() {
     oldTime = timeGetTime();
 }
 
+void computePos(float deltaforward, float deltaside){
+    camx += deltaforward * lx * 2;
+    camz += deltaforward * lz * 2;
+    camx += deltaside * (lx + sin(90));
+    camz += deltaside * (lz + sin(90));
+    
+    
+    if (camx >= window_width/10) {
+        camx = window_width/10 - 1;
+    }
+    if (camx <= -window_width/10) {
+        camx = -window_width/10 + 1;
+    }
+    if (camz >= 180) {
+        camz = 180 - 1;
+    }
+    if (camz <= -180) {
+        camz = -180 + 1;
+    }
+}
+
+void computeDir(float deltaAngle){
+    angle += deltaAngle * .25;
+    lx = sin(angle);
+    lz = -cos(angle);
+    
+}
+
 void move(double dt) {
     for (int i = 0; i < numballs; i++) {
         double newdt = dt / 100;
         
         // store old positions
-        balls[i].oldposition.x = balls[i].position.x;
-        balls[i].oldposition.y = balls[i].position.y;
-        balls[i].oldposition.z = balls[i].position.z;
+        balls[i].oldposition = {
+            balls[i].position.x,
+            balls[i].position.y,
+            balls[i].position.z
+        };
         
         // update positions
-        balls[i].position.x = balls[i].oldposition.x + balls[i].velocity.x * newdt;
-        balls[i].position.y = balls[i].oldposition.y + balls[i].velocity.y * newdt;
-        balls[i].position.z = balls[i].oldposition.z + balls[i].velocity.z * newdt;
+        balls[i].position = {
+            balls[i].oldposition.x + balls[i].velocity.x * newdt,
+            balls[i].oldposition.y + balls[i].velocity.y * newdt,
+            balls[i].oldposition.z + balls[i].velocity.z * newdt
+        };
     }
 }
 
@@ -106,22 +153,26 @@ void sticky(double dt) {
         double dz = balls[i].oldposition.z - balls[i].equilib.z;
         
         // get relative velocity between the sticky objects
-        double dvx = balls[i].velocity.x - balls[balls[i].relobj].velocity.x;
-        double dvy = balls[i].velocity.y - balls[balls[i].relobj].velocity.y;
-        double dvz = balls[i].velocity.z - balls[balls[i].relobj].velocity.z;
+//        double dvx = balls[i].velocity.x - balls[balls[i].relobj].velocity.x;
+//        double dvy = balls[i].velocity.y - balls[balls[i].relobj].velocity.y;
+//        double dvz = balls[i].velocity.z - balls[balls[i].relobj].velocity.z;
 
         // if the the balls have to act as a spring
         if (balls[i].spring == true) {
             
             // store old velocities
-            balls[i].oldvelocity.x = balls[i].velocity.x;
-            balls[i].oldvelocity.y = balls[i].velocity.y;
-            balls[i].oldvelocity.z = balls[i].velocity.z;
+            balls[i].oldvelocity = {
+                balls[i].velocity.x,
+                balls[i].velocity.y,
+                balls[i].velocity.z
+            };
             
             // update velocities using spring force
-            balls[i].velocity.x = balls[i].oldvelocity.x - k * dx * newdt - b * dvx * newdt;
-            balls[i].velocity.y = balls[i].oldvelocity.y - k * dy * newdt - b * dvy * newdt;
-            balls[i].velocity.z = balls[i].oldvelocity.z - k * dz * newdt - b * dvz * newdt;
+            balls[i].velocity = {
+                balls[i].oldvelocity.x - newdt * k * dx,
+                balls[i].oldvelocity.y - newdt * k * dy,
+                balls[i].oldvelocity.z - newdt * k * dz
+            };
             
             // if the balls have gone over a certain sticky force field
             if (dx > v || dy > v || dz > v) {
@@ -165,24 +216,30 @@ double dotProduct(TVector a, TVector b){
 
 TVector crossProduct(TVector a, TVector b) {
     TVector *cross = new TVector;
-    cross->x = (a.y * b.z) - (a.z * b.y);
-    cross->y = (a.z * b.x) - (a.x * b.z);
-    cross->z = (a.x * b.y) - (a.y * b.x);
+    *cross = {
+        (a.y * b.z) - (a.z * b.y),
+        (a.z * b.x) - (a.x * b.z),
+        (a.x * b.y) - (a.y * b.x)
+    };
     return *cross;
 }
 
 bool collisionTest(int i, int j) {
     // difference position vectors
     TVector * deltapos = new TVector;
-    deltapos->x = balls[i].position.x - balls[j].position.x;
-    deltapos->y = balls[i].position.y - balls[j].position.y;
-    deltapos->z = balls[i].position.z - balls[j].position.z;
+    *deltapos = {
+        balls[i].position.x - balls[j].position.x,
+        balls[i].position.y - balls[j].position.y,
+        balls[i].position.z - balls[j].position.z
+    };
     
     // difference velocity vectors
     TVector * deltavel = new TVector;
-    deltavel->x = balls[i].velocity.x - balls[j].velocity.x;
-    deltavel->y = balls[i].velocity.y - balls[j].velocity.y;
-    deltavel->z = balls[i].velocity.z - balls[j].velocity.z;
+    *deltavel = {
+        balls[i].velocity.x - balls[j].velocity.x,
+        balls[i].velocity.y - balls[j].velocity.y,
+        balls[i].velocity.z - balls[j].velocity.z
+    };
     
     // double the radius, then square it
     double r = radius * 2;
@@ -223,18 +280,24 @@ void collide() {
         for (int j = i + 1; j < numballs; j++) {
             if (collisionTest(i, j)) {
                 // move the two balls to their intersecting point
-                balls[i].position.x = balls[i].oldposition.x + balls[i].velocity.x * balls[i].collidetime;
-                balls[i].position.y = balls[i].oldposition.y + balls[i].velocity.y * balls[i].collidetime;
-                balls[i].position.z = balls[i].oldposition.z + balls[i].velocity.z * balls[i].collidetime;
+                balls[i].position = {
+                    balls[i].oldposition.x + balls[i].velocity.x * balls[i].collidetime,
+                    balls[i].oldposition.y + balls[i].velocity.y * balls[i].collidetime,
+                    balls[i].oldposition.z + balls[i].velocity.z * balls[i].collidetime
+                };
 
-                balls[j].position.x = balls[j].oldposition.x + balls[j].velocity.x * balls[j].collidetime;
-                balls[j].position.y = balls[j].oldposition.y + balls[j].velocity.y * balls[j].collidetime;
-                balls[j].position.z = balls[j].oldposition.z + balls[j].velocity.z * balls[j].collidetime;
+                balls[j].position = {
+                    balls[j].oldposition.x + balls[j].velocity.x * balls[j].collidetime,
+                    balls[j].oldposition.y + balls[j].velocity.y * balls[j].collidetime,
+                    balls[j].oldposition.z + balls[j].velocity.z * balls[j].collidetime
+                };
                 
                 // set the two balls' equlibrium point to their intersecting point
-                balls[i].equilib.x = balls[i].position.x;
-                balls[i].equilib.y = balls[i].position.y;
-                balls[i].equilib.z = balls[i].position.z;
+                balls[i].equilib = {
+                    balls[i].position.x,
+                    balls[i].position.y,
+                    balls[i].equilib.z = balls[i].position.z
+                };
                 
                 balls[j].equilib = {balls[j].position.x, balls[j].position.y, balls[j].position.z};
                 
@@ -245,12 +308,17 @@ void collide() {
                 balls[j].oldvelocity.z = balls[j].velocity.z;
                 
                 // update the new velocities through switching them
-                balls[i].velocity.x = balls[j].oldvelocity.x;
-                balls[j].velocity.x = balls[i].oldvelocity.x;
-                balls[i].velocity.y = balls[j].oldvelocity.y;
-                balls[j].velocity.y = balls[i].oldvelocity.y;
-                balls[i].velocity.z = balls[j].oldvelocity.z;
-                balls[j].velocity.z = balls[i].oldvelocity.z;
+                balls[i].velocity = {
+                    balls[j].oldvelocity.x,
+                    balls[j].oldvelocity.y,
+                    balls[j].oldvelocity.z
+                };
+                
+                balls[j].velocity = {
+                    balls[i].oldvelocity.x,
+                    balls[i].oldvelocity.y,
+                    balls[i].oldvelocity.z
+                };
                 
                 // now turn on the sticky force for both objects
                 balls[i].spring = true;
@@ -262,6 +330,28 @@ void collide() {
             }
         }
     }
+}
+
+void bend() {
+    for (int i = 0; i < numballs; i++) {
+        if (balls[i].position.x < camx + lx + 1 || balls[i].position.x > camx + lx - 1) {
+                balls[i].velocity = {0,0,0};
+        }
+        
+        balls[i].oldvelocity = balls[i].velocity;
+        
+        // Displacement between the box and the balls
+        float dx = (camx + lx) - balls[i].oldposition.x;
+        float dy = 1.0f - balls[i].oldposition.y;
+        float dz = (camz + lz - 20) - balls[i].oldposition.z;
+        
+        // Change the direction of the balls to be attracted to the box
+        balls[i].velocity = {
+            dx / 10,
+            dy / 10,
+            dz / 10
+        };
+    };
 }
 
 void makeball(TObject3D ball) {
@@ -283,16 +373,18 @@ void makeball(TObject3D ball) {
 }
 
 void display() {
+    
+    computePos(deltaForwardMove, deltaSideMove);
+    
+    if(deltaAngle){
+        computeDir(deltaAngle);
+    }
+    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     // Load identity matrix
     glLoadIdentity();
-    
-    glPushMatrix();
-    glutSolidCube(1);
-    glTranslatef(camx, 1.0f, camz);
-    glPopMatrix();
-    
+
     gluLookAt(camx,     1.0f,   camz,
               camx+lx,  1.0f,   camz+lz,
               0.0f,     1.0f,   0.0f);
@@ -363,6 +455,21 @@ void display() {
         makeball(balls[i]);
     }
     
+    // Draw 2 cubes
+    glLoadIdentity();
+    glPushMatrix();
+    glTranslatef(-7, -5, -20);
+    glColor3f(0.9, 0.9, 0.9);
+    glutSolidCube(2);
+    glPopMatrix();
+    
+    glLoadIdentity();
+    glPushMatrix();
+    glTranslatef(7, -5, -20);
+    glColor3f(0.9, 0.9, 0.9);
+    glutSolidCube(2);
+    glPopMatrix();
+    
     // Swap buffers (color buffers, makes previous render visible)
     glutSwapBuffers();
 }
@@ -372,31 +479,84 @@ void processNormalKeys(unsigned char key, int x, int y) {
         case 'g':
             g = 0;
             break;
+        case ' ':
+            for (int i = 0; i < numballs; i++) {
+                balls[i].defvelocity = balls[i].oldvelocity;
+            }
+            bend();
+            break;
     }
 }
 
 void processSpecialKeys(int key, int xx, int yy) {
-    float fraction = 10.0f;
 
 	switch (key) {
 		case GLUT_KEY_LEFT :
-			angle -= 0.1f;
-			lx = sin(angle);
-			lz = -cos(angle);
+            deltaSideMove = -0.45;
 			break;
 		case GLUT_KEY_RIGHT :
-			angle += 0.1f;
-			lx = sin(angle);
-			lz = -cos(angle);
+            deltaSideMove = 0.45;
 			break;
 		case GLUT_KEY_UP :
-			camx += lx * fraction;
-			camz += lz * fraction;
+            deltaForwardMove = 0.45;
 			break;
 		case GLUT_KEY_DOWN :
-			camx -= lx * fraction;
-			camz -= lz * fraction;
+            deltaForwardMove = -0.45;
 			break;
+	}
+}
+
+void releaseKey (unsigned char key, int x, int y) {
+    switch (key) {
+        case 'g':
+            g = 0.5;
+            break;
+        case ' ':
+            for (int i = 0; i < numballs; i++) {
+                balls[i].oldvelocity = balls[i].defvelocity;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void releaseSpecialKey (int key, int x, int y) {
+    switch (key) {
+        case GLUT_KEY_LEFT :
+		case GLUT_KEY_RIGHT :
+            deltaSideMove = 0;
+			break;
+		case GLUT_KEY_UP :
+		case GLUT_KEY_DOWN :
+            deltaForwardMove = 0;
+			break;
+    }
+}
+
+void mouseMove(int x, int y){
+    // this will only be true when the left button is down
+    if (xOrigin >= 0) {
+        
+		// update deltaAngle
+		deltaAngle = (x - xOrigin) * 0.001f;
+	}
+}
+
+void mouseButton(int button, int state, int x, int y) {
+    
+	// only start motion if the left button is pressed
+	if (button == GLUT_LEFT_BUTTON) {
+        
+		// when the button is released
+		if (state == GLUT_UP) {
+			angle += deltaAngle;
+			xOrigin = -1;
+            deltaAngle = 0;
+		}
+		else  {
+			xOrigin = x;
+		}
 	}
 }
 
@@ -407,7 +567,7 @@ void idle () {
             // move the balls
             edge();
             move(dt);
-            collide();
+            //collide();
             gravity(dt);
             sticky(dt);
             // compute the frame rate
@@ -446,7 +606,12 @@ int main(int argc, char** argv) {
     GL_Setup(window_width, window_height);
     
     glutKeyboardFunc(processNormalKeys);
+    glutKeyboardUpFunc(releaseKey);
 	glutSpecialFunc(processSpecialKeys);
+    glutSpecialUpFunc(releaseSpecialKey);
+    
+    glutMouseFunc(mouseButton);
+    glutMotionFunc(mouseMove);
     
     glutMainLoop();
 }
