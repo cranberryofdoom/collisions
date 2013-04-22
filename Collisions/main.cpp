@@ -58,7 +58,7 @@ char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 100;
+int         numballs = 200;
 TObject3D   *balls = new TObject3D[numballs];
 
 
@@ -96,10 +96,9 @@ void initialize() {
 void computePos(float deltaforward, float deltaside){
     camx += deltaforward * lx * 2;
     camz += deltaforward * lz * 2;
-    camx += deltaside * (lx + sin(90));
-    camz += deltaside * (lz + sin(90));
-    
-    
+    camx += deltaside * (-lz) * 2;
+    camz += deltaside * lx * 2;
+
     if (camx >= window_width/10) {
         camx = window_width/10 - 1;
     }
@@ -118,7 +117,6 @@ void computeDir(float deltaAngle){
     angle += deltaAngle * .25;
     lx = sin(angle);
     lz = -cos(angle);
-    
 }
 
 void move(double dt) {
@@ -143,7 +141,6 @@ void move(double dt) {
 
 void sticky(double dt) {
     double newdt = dt / 100;
-    
 
     for (int i = 0; i < numballs; i++) {
         
@@ -151,11 +148,6 @@ void sticky(double dt) {
         double dx = balls[i].oldposition.x - balls[i].equilib.x;
         double dy = balls[i].oldposition.y - balls[i].equilib.y;
         double dz = balls[i].oldposition.z - balls[i].equilib.z;
-        
-        // get relative velocity between the sticky objects
-//        double dvx = balls[i].velocity.x - balls[balls[i].relobj].velocity.x;
-//        double dvy = balls[i].velocity.y - balls[balls[i].relobj].velocity.y;
-//        double dvz = balls[i].velocity.z - balls[balls[i].relobj].velocity.z;
 
         // if the the balls have to act as a spring
         if (balls[i].spring == true) {
@@ -178,6 +170,20 @@ void sticky(double dt) {
             if (dx > v || dy > v || dz > v) {
                 balls[i].spring = false;
             }
+        }
+        
+        if (isnan(balls[i].velocity.x) || isnan(balls[i].velocity.y) || isnan(balls[i].velocity.z)) {
+            balls[i].position = {
+                camx + lx + static_cast<double>(rand() % (velmax - velmin) + velmin),
+                1 + static_cast<double>(rand() % (velmax - velmin) + velmin),
+                camz + lz + static_cast<double>(rand() % (velmax - velmin) + velmin - 20)
+            };
+
+            balls[i].velocity = {
+                static_cast<double>(rand() % (velmax - velmin) + velmin),
+                static_cast<double>(rand() % (velmax - velmin) + velmin),
+                static_cast<double>(rand() % (velmax - velmin) + velmin)
+            };
         }
     }
 }
@@ -293,32 +299,18 @@ void collide() {
                 };
                 
                 // set the two balls' equlibrium point to their intersecting point
-                balls[i].equilib = {
-                    balls[i].position.x,
-                    balls[i].position.y,
-                    balls[i].equilib.z = balls[i].position.z
-                };
+                balls[i].equilib = {balls[i].position.x, balls[i].position.y, balls[i].position.z};
                 
                 balls[j].equilib = {balls[j].position.x, balls[j].position.y, balls[j].position.z};
                 
                 // store old velocities of x and z because they've never been stored before
-                balls[i].oldvelocity.x = balls[i].velocity.x;
-                balls[j].oldvelocity.x = balls[j].velocity.x;
-                balls[i].oldvelocity.z = balls[i].velocity.z;
-                balls[j].oldvelocity.z = balls[j].velocity.z;
+                balls[i].oldvelocity = {balls[i].velocity.x, balls[i].oldvelocity.y, balls[i].velocity.z};
+                balls[j].oldvelocity = {balls[j].velocity.x, balls[j].oldvelocity.y, balls[j].velocity.z};
                 
                 // update the new velocities through switching them
-                balls[i].velocity = {
-                    balls[j].oldvelocity.x,
-                    balls[j].oldvelocity.y,
-                    balls[j].oldvelocity.z
-                };
+                balls[i].velocity = {balls[j].oldvelocity.x, balls[j].oldvelocity.y, balls[j].oldvelocity.z};
                 
-                balls[j].velocity = {
-                    balls[i].oldvelocity.x,
-                    balls[i].oldvelocity.y,
-                    balls[i].oldvelocity.z
-                };
+                balls[j].velocity = {balls[i].oldvelocity.x, balls[i].oldvelocity.y, balls[i].oldvelocity.z};
                 
                 // now turn on the sticky force for both objects
                 balls[i].spring = true;
@@ -341,16 +333,12 @@ void bend() {
         balls[i].oldvelocity = balls[i].velocity;
         
         // Displacement between the box and the balls
-        float dx = (camx + lx) - balls[i].oldposition.x;
+        float dx = ((camx - lx) / 2)  - balls[i].oldposition.x;
         float dy = 1.0f - balls[i].oldposition.y;
-        float dz = (camz + lz - 20) - balls[i].oldposition.z;
+        float dz = ((camz - lz) / 2)  - 20 - balls[i].oldposition.z;
         
         // Change the direction of the balls to be attracted to the box
-        balls[i].velocity = {
-            dx / 10,
-            dy / 10,
-            dz / 10
-        };
+        balls[i].velocity = {dx/dt, dy/dt, dz/dt};
     };
 }
 
@@ -567,7 +555,7 @@ void idle () {
             // move the balls
             edge();
             move(dt);
-            //collide();
+            collide();
             gravity(dt);
             sticky(dt);
             // compute the frame rate
@@ -577,7 +565,6 @@ void idle () {
         // notify window it has to be repainted
         glutPostRedisplay();
     }
-    
 }
 
 // Initialze OpenGL perspective matrix
