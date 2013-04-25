@@ -16,7 +16,6 @@ typedef struct {
 
 typedef struct{
     int     ballid;
-    double  collidetime;
     TVector equilib;
 }attachedBalls;
 
@@ -30,8 +29,10 @@ typedef struct {
     bool    spring;
     int     relobj;
     double  collidetime;
-    attachedBalls   attached[5];
+    attachedBalls   attached[3];
 }TObject3D;
+
+int numattached = 3;
 
 // angle of rotation for camera
 float       angle = 0.0f;
@@ -90,6 +91,10 @@ void initialize() {
             static_cast<double>(rand() % (velmax - velmin) + velmin),
             static_cast<double>(rand() % (velmax - velmin) + velmin)
         };
+        for (int j = 0; j < numattached; j++) {
+            // if the ballid is -1 that means it's not vaild
+            balls[i].attached[j].ballid = -1;
+        }
         balls[i].spring = false;
     }
     oldTime = timeGetTime();
@@ -166,53 +171,55 @@ void borderRepos(int i){
 
 void sticky(double dt) {
     double newdt = dt / 100;
-
     for (int i = 0; i < numballs; i++) {
-        
-        // get the displacement from equilibrium
-        double dx = balls[i].oldposition.x - balls[i].equilib.x;
-        double dy = balls[i].oldposition.y - balls[i].equilib.y;
-        double dz = balls[i].oldposition.z - balls[i].equilib.z;
-
-        // if the the balls have to act as a spring
-        if (balls[i].spring == true) {
-            
-            // store old velocities
-            balls[i].oldvelocity = {
-                balls[i].velocity.x,
-                balls[i].velocity.y,
-                balls[i].velocity.z
-            };
-            
-            // update velocities using spring force
-            balls[i].velocity = {
-                balls[i].oldvelocity.x - newdt * k * dx,
-                balls[i].oldvelocity.y - newdt * k * dy,
-                balls[i].oldvelocity.z - newdt * k * dz
-            };
-            
-            // if the balls have gone over a certain sticky force field
-            if (dx > v || dy > v || dz > v) {
-                balls[i].spring = false;
+        for (int j = 0; j < numattached; j++) {
+            if (balls[i].attached[j].ballid != -1) {
+                // get the displacement from equilibrium
+                double dx = balls[i].oldposition.x - balls[i].attached[j].equilib.x;
+                double dy = balls[i].oldposition.y - balls[i].attached[j].equilib.y;
+                double dz = balls[i].oldposition.z - balls[i].attached[j].equilib.z;
+                
+                // if the the balls have to act as a spring
+                if (balls[i].spring == true) {
+                    
+                    // store old velocities
+                    balls[i].oldvelocity = {
+                        balls[i].velocity.x,
+                        balls[i].velocity.y,
+                        balls[i].velocity.z
+                    };
+                    
+                    // update velocities using spring force
+                    balls[i].velocity = {
+                        balls[i].oldvelocity.x - newdt * k * dx,
+                        balls[i].oldvelocity.y - newdt * k * dy,
+                        balls[i].oldvelocity.z - newdt * k * dz
+                    };
+                    
+                    // if the balls have gone over a certain sticky force field
+                    if (dx > v || dy > v || dz > v) {
+                        balls[i].spring = false;
+                    }
+                }
+                
+                // reposition balls if they disappear
+                if (isnan(balls[i].velocity.x) || isnan(balls[i].velocity.y) || isnan(balls[i].velocity.z)) {
+                    balls[i].position = {
+                        (camx + 360 * lx)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin),
+                        1 + static_cast<double>(rand() % (velmax - velmin) + velmin),
+                        (camz + 360 * lz)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin)
+                    };
+                    
+                    // reposition balls if they're past the border
+                    borderRepos(i);
+                    
+                    balls[i].velocity = {
+                        static_cast<double>(rand() % (velmax - velmin) + velmin),
+                        static_cast<double>(rand() % (velmax - velmin) + velmin),
+                        static_cast<double>(rand() % (velmax - velmin) + velmin)
+                    };
+                }
             }
-        }
-        
-        // reposition balls if they disappear
-        if (isnan(balls[i].velocity.x) || isnan(balls[i].velocity.y) || isnan(balls[i].velocity.z)) {
-            balls[i].position = {
-                (camx + 360 * lx)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin),
-                1 + static_cast<double>(rand() % (velmax - velmin) + velmin),
-                (camz + 360 * lz)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin)
-            };
-            
-            // reposition balls if they're past the border
-            borderRepos(i);
-
-            balls[i].velocity = {
-                static_cast<double>(rand() % (velmax - velmin) + velmin),
-                static_cast<double>(rand() % (velmax - velmin) + velmin),
-                static_cast<double>(rand() % (velmax - velmin) + velmin)
-            };
         }
     }
 }
@@ -252,6 +259,16 @@ double dotProduct(TVector a, TVector b){
     double dot = (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
     return dot;
     
+}
+
+int checkindex(int ball) {
+    for (int k = 0; k < numattached; k++) {
+        if (balls[ball].attached[k].ballid == -1){
+            return k;
+        }
+        break;
+    }
+    return 0;
 }
 
 bool collisionTest(int i, int j) {
@@ -301,7 +318,6 @@ bool collisionTest(int i, int j) {
     // figure out the time when the ball collided
     balls[i].collidetime = (-b - sqrt(d)) / a;
     balls[j].collidetime = (-b - sqrt(d)) / a;
-    
     return (d > 0);
 }
 
@@ -322,10 +338,13 @@ void collide() {
                     balls[j].oldposition.z + balls[j].velocity.z * balls[j].collidetime
                 };
                 
-                // set the two balls' equlibrium point to their intersecting point
-                balls[i].equilib = {balls[i].position.x, balls[i].position.y, balls[i].position.z};
+                // find which index to put the potentially attached ball in
+                int indexi = checkindex(i);
+                int indexj = checkindex(j);
                 
-                balls[j].equilib = {balls[j].position.x, balls[j].position.y, balls[j].position.z};
+                // set the two balls' equlibrium point to their intersecting point
+                balls[i].attached[indexi].equilib = {balls[i].position.x, balls[i].position.y, balls[i].position.z};
+                balls[j].attached[indexj].equilib = {balls[j].position.x, balls[j].position.y, balls[j].position.z};
                 
                 // store old velocities of x and z because they've never been stored before
                 balls[i].oldvelocity = {balls[i].velocity.x, balls[i].oldvelocity.y, balls[i].velocity.z};
@@ -337,12 +356,14 @@ void collide() {
                 balls[j].velocity = {balls[i].oldvelocity.x, balls[i].oldvelocity.y, balls[i].oldvelocity.z};
                 
                 // now turn on the sticky force for both objects
+                /*
                 balls[i].spring = true;
                 balls[j].spring = true;
+                */
                 
                 // identify the other ball that it's sticky to
-                balls[i].relobj = j;
-                balls[j].relobj = i;
+                balls[i].attached[indexi].ballid = j;
+                balls[j].attached[indexj].ballid = i;
             }
         }
     }
@@ -432,7 +453,6 @@ void makewalls() {
 
 void makeball(TObject3D ball) {
     // Draw a sphere
-
     glColor3f(ball.velocity.x/5, ball.velocity.y/5, ball.velocity.z/5);
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
@@ -458,31 +478,21 @@ void makecubes() {
 }
 
 void display() {
-    
     computePos(deltaForwardMove, deltaSideMove);
-    
     if(deltaAngle){
         computeDir(deltaAngle);
     }
-    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // Load identity matrix
     glLoadIdentity();
-
     gluLookAt(camx,     1.0f,   camz,
               camx+lx,  1.0f,   camz+lz,
               0.0f,     1.0f,   0.0f);
-    
-
     makelighting();
     makewalls();
     for (int i = 0; i < numballs; i++) {
         makeball(balls[i]);
     }
     makecubes();
-    
-    // Swap buffers (color buffers, makes previous render visible)
     glutSwapBuffers();
 }
 
