@@ -49,10 +49,18 @@ int         dt = 25;
 // room variables
 int         roomXmax = window_width/5;
 int         roomXmin = -window_width/5;
+
+// ball initialize
 int         posmax = window_width/20 - 20;
 int         posmin = -window_width/20 + 20;
 int         velmax = 10;
 int         velmin = -10;
+
+// fucking crazy bool
+bool        crazy = false;
+// shit i'm normal bool
+bool        normal = true;
+
 char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
@@ -425,7 +433,18 @@ void makewalls() {
 
 void makeball(TObject3D ball) {
     // Draw a sphere
-    glColor3f(ball.velocity.x/5, ball.velocity.y/5, ball.velocity.z/5);
+    if (crazy) {
+        
+        glColor3f(ball.velocity.x/10 + 0.5 , ball.velocity.y/10 + 0.5, ball.velocity.z/10 + 0.5);
+    }
+    else {
+    if (ball.velocity.y < 0) {
+        glColor3f(0, -ball.velocity.y/10 + 0.1, -ball.velocity.y/10 + 0.5);
+        }
+    else {
+    glColor3f(0, ball.velocity.y/10 + 0.1, ball.velocity.y/10 + 0.5);
+    }
+    }
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
     glutSolidSphere(radius, 30, 30);
@@ -502,6 +521,20 @@ void releaseSpecialKey (int key, int x, int y) {
 		case GLUT_KEY_DOWN :
             deltaForwardMove = 0;
 			break;
+    }
+}
+
+void processNormalKeys (unsigned char key, int x, int y) {
+    switch (key) {
+        case 'c':
+            crazy = true;
+            normal = false;
+            break;
+        case 'n':
+            crazy = false;
+            normal = true;
+        default:
+            break;
     }
 }
 
@@ -582,6 +615,7 @@ int main(int argc, char** argv) {
     
     GL_Setup(window_width, window_height);
     
+    glutKeyboardFunc(processNormalKeys);
 	glutSpecialFunc(processSpecialKeys);
     glutSpecialUpFunc(releaseSpecialKey);
     
