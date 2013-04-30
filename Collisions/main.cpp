@@ -40,7 +40,7 @@ float       deltaSideMove = 0;
 int         xOrigin = -1;
 
 // physics constants
-int         v = 5;
+int         v = 8;
 int         k = 1;
 float       g = 0.5;
 int         radius = 1;
@@ -57,7 +57,7 @@ char        *theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
-int         numballs = 200;
+int         numballs = 300;
 TObject3D   *balls = new TObject3D[numballs];
 
 
@@ -193,9 +193,9 @@ void sticky(double dt) {
         // reposition balls if they disappear
         if (isnan(balls[i].velocity.x) || isnan(balls[i].velocity.y) || isnan(balls[i].velocity.z)) {
             balls[i].position = {
-                (camx + 360 * lx)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin),
-                1 + static_cast<double>(rand() % (velmax - velmin) + velmin),
-                (camz + 360 * lz)/2 + static_cast<double>(rand() % (velmax - velmin) + velmin)
+                (camx + 360 * lx)/2 + static_cast<double>(rand() % + 30),
+                1 + static_cast<double>(rand() % + 30),
+                (camz + 360 * lz)/2 + 75 + static_cast<double>(rand() % 30)
             };
             
             // reposition balls if they're past the border
@@ -352,10 +352,10 @@ void bend(float deltaside) {
         // Displacement between the box and the balls
         float dx = (camx + 360 * lx)/2  - balls[i].oldposition.x;
         float dy = 1.0f - balls[i].oldposition.y;
-        float dz = (camz + 360 * lz)/2 - balls[i].oldposition.z;
+        float dz = (camz + 360 * lz)/2 + 75 - balls[i].oldposition.z;
         
         // Change the direction of the balls to be attracted to a point
-        balls[i].velocity = {dx/dt, dy/dt, dz/dt};
+        balls[i].velocity = {dx/dt*10, dy/dt*10, dz/dt*10};
     };
 }
 
@@ -461,12 +461,9 @@ void display() {
     
     // Load identity matrix
     glLoadIdentity();
-    
     gluLookAt(camx,     1.0f,   camz,
               camx+lx,  1.0f,   camz+lz,
               0.0f,     1.0f,   0.0f);
-    
-    
     makelighting();
     makewalls();
     for (int i = 0; i < numballs; i++) {
@@ -478,22 +475,7 @@ void display() {
     glutSwapBuffers();
 }
 
-void processNormalKeys(unsigned char key, int x, int y) {
-    switch (key) {
-        case 'g':
-            g = 0;
-            break;
-        case ' ':
-            for (int i = 0; i < numballs; i++) {
-                balls[i].tempvelocity = balls[i].oldvelocity;
-            }
-            bend(deltaAngle);
-            break;
-    }
-}
-
 void processSpecialKeys(int key, int xx, int yy) {
-    
 	switch (key) {
 		case GLUT_KEY_LEFT :
             deltaSideMove = -0.45;
@@ -508,21 +490,6 @@ void processSpecialKeys(int key, int xx, int yy) {
             deltaForwardMove = -0.45;
 			break;
 	}
-}
-
-void releaseKey (unsigned char key, int x, int y) {
-    switch (key) {
-        case 'g':
-            g = 0.5;
-            break;
-        case ' ':
-            for (int i = 0; i < numballs; i++) {
-                balls[i].oldvelocity = balls[i].tempvelocity;
-            }
-            break;
-        default:
-            break;
-    }
 }
 
 void releaseSpecialKey (int key, int x, int y) {
@@ -543,13 +510,18 @@ void mouseMove(int x, int y){
     if (xOrigin >= 0) {
         
 		// update deltaAngle
-		deltaAngle = (x - xOrigin) * 0.001f;
+		deltaAngle = (x - xOrigin) * 0.0005f;
+        
+        // bend that shit
+        for (int i = 0; i < numballs; i++) {
+            balls[i].tempvelocity = balls[i].oldvelocity;
+        }
+        bend(deltaAngle);
 	}
 }
 
 void mouseButton(int button, int state, int x, int y) {
-    
-	// only start motion if the left button is pressed
+    // only start motion if the left button is pressed
 	if (button == GLUT_LEFT_BUTTON) {
         
 		// when the button is released
@@ -610,8 +582,6 @@ int main(int argc, char** argv) {
     
     GL_Setup(window_width, window_height);
     
-    glutKeyboardFunc(processNormalKeys);
-    glutKeyboardUpFunc(releaseKey);
 	glutSpecialFunc(processSpecialKeys);
     glutSpecialUpFunc(releaseSpecialKey);
     
