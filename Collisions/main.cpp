@@ -27,17 +27,18 @@ typedef struct {
 }TObject3D;
 
 // angle of rotation for camera
-float       angle = 0.0f;
+float       anglex = 0.0f, angley = 0.0f;
 // actual vector representing the camera's direction
-float       lx = 0.0f, lz = -1.0f;
+float       lx = 0.0f, ly = 0.0f, lz = -1.0f;
 // XZ position of the camera
 float       camx = 0.0f, camz = 75.0f;
 
 // the key states where variables will be zero when no key is being presses
-float       deltaAngle = 0.0f;
+float       deltaAnglex = 0.0f;
+float       deltaAngley = 0.0f;
 float       deltaForwardMove = 0;
 float       deltaSideMove = 0;
-int         xOrigin = -1;
+int         xOrigin = -1, yOrigin = -1;
 
 // physics constants
 int         v = 8;
@@ -47,10 +48,15 @@ int         radius = 1;
 int         dt = 25;
 
 // room variables
-int         roomXmax = window_width/5;
-int         roomXmin = -window_width/5;
+int         roomXmax = window_width/2;
+int         roomXmin = -window_width/2;
+int         roomYmax = window_height/5;
+int         roomYmin = -window_height/20 +15;
+int         roomZmax = 300;
+int         roomZmin = -300;
 
-// ball initialize
+
+// initialize ball variables
 int         posmax = window_width/20 - 20;
 int         posmin = -window_width/20 + 20;
 int         velmax = 10;
@@ -61,18 +67,19 @@ bool        crazy = false;
 // shit i'm normal bool
 bool        normal = true;
 
-char        *theProgramTitle;
+char*       theProgramTitle;
 bool        isAnimating = true;
 GLuint      currentTime;
 GLuint      oldTime;
 int         numballs = 300;
-TObject3D   *balls = new TObject3D[numballs];
+TObject3D*  balls = new TObject3D[numballs];
+TObject3D*  fire = new TObject3D[100];
 
 
 // render delay 25 milliseconds
 const GLuint ANIMATION_DELAY = 25;
 
-// Main loop
+// main loop
 GLuint timeGetTime() {
     timeval time;
     gettimeofday(&time, NULL);
@@ -96,6 +103,10 @@ void initialize() {
     oldTime = timeGetTime();
 }
 
+void initalizeFire() {
+    
+}
+
 void computePos(float deltaforward, float deltaside){
     camx += deltaforward * lx * 2;
     camz += deltaforward * lz * 2;
@@ -108,23 +119,50 @@ void computePos(float deltaforward, float deltaside){
     if (camx <= roomXmin) {
         camx = roomXmin + 1;
     }
-    if (camz >= 180) {
-        camz = 180 - 1;
+    if (camz >= roomZmax) {
+        camz = roomZmax - 1;
     }
-    if (camz <= -180) {
-        camz = -180 + 1;
+    if (camz <= roomZmin) {
+        camz = roomZmin + 1;
     }
 }
 
-void computeDir(float deltaAngle){
-    angle += deltaAngle * .25;
-    lx = sin(angle);
-    lz = -cos(angle);
+void computeDir(float deltaAnglex, float deltaAngley){
+    anglex += deltaAnglex * .25;
+    angley += deltaAngley * .25;
+    lx = sin(anglex);
+    ly = -sin(angley);
+    lz = -cos(anglex);
 }
+
+void velocityCheck(TObject3D ball) {
+    if (ball.velocity.x > velmax ) {
+        ball.velocity.x = velmax;
+    }
+    if (ball.velocity.y > velmax) {
+        ball.velocity.y = velmax;
+    }
+    if (ball.velocity.z > velmax) {
+        ball.velocity.z = velmax;
+    }
+    if (ball.velocity.x < velmin ) {
+        ball.velocity.x = velmin;
+    }
+    if (ball.velocity.y < velmin) {
+        ball.velocity.y = velmin;
+    }
+    if (ball.velocity.z < velmin) {
+        ball.velocity.z = velmin;
+    }
+}
+
 
 void move(double dt) {
     for (int i = 0; i < numballs; i++) {
         double newdt = dt / 100;
+        
+        // check the velocities for those that go too fast
+        velocityCheck(balls[i]);
         
         // store old positions
         balls[i].oldposition = {
@@ -144,24 +182,24 @@ void move(double dt) {
 
 void borderRepos(int i){
     
-    // Reposition everything if on the borders
+    // reposition everything if on the borders
     if (balls[i].position.x <= roomXmin){
         balls[i].position.x = roomXmin + 1;
     }
     if (balls[i].position.x >= roomXmax){
         balls[i].position.x = roomXmax - 1;
     }
-    if (balls[i].position.y <= -window_height/20 + 15){
-        balls[i].position.y = -window_height/20 + 15 + 1;
+    if (balls[i].position.y <= roomYmin){
+        balls[i].position.y = roomYmin + 1;
     }
-    if (balls[i].position.y >= window_height/20 - 15){
-        balls[i].position.y = window_height/20 - 15 - 1;
+    if (balls[i].position.y >= roomYmax){
+        balls[i].position.y = roomYmax - 1;
     }
-    if (balls[i].position.z <= -180){
-        balls[i].position.z = -180 + 1;
+    if (balls[i].position.z <= roomZmin){
+        balls[i].position.z = roomZmin + 1;
     }
-    if (balls[i].position.z >= 180){
-        balls[i].position.z = 180 - 1;
+    if (balls[i].position.z >= roomZmax){
+        balls[i].position.z = roomZmax - 1;
     }
 }
 
@@ -202,8 +240,8 @@ void sticky(double dt) {
         if (isnan(balls[i].velocity.x) || isnan(balls[i].velocity.y) || isnan(balls[i].velocity.z)) {
             balls[i].position = {
                 (camx + 360 * lx)/2 + static_cast<double>(rand() % + 30),
-                1 + static_cast<double>(rand() % + 30),
-                (camz + 360 * lz)/2 + 75 + static_cast<double>(rand() % 30)
+                (1.0 + 360 * ly)/2 + static_cast<double>(rand() % + 30),
+                (camz + 360 * lz)/2 + 90 + static_cast<double>(rand() % 30)
             };
             
             // reposition balls if they're past the border
@@ -233,18 +271,18 @@ void gravity(double dt) {
 void edge() {
     for (int i = 0; i < numballs; i++) {
         
-        // Reverse velocities if at edge
+        // reverse velocities if at edge
         if (balls[i].position.x <= roomXmin || balls[i].position.x >= roomXmax) {
             balls[i].velocity.x = -balls[i].velocity.x;
         }
-        if (balls[i].position.y <= -window_height/20 + 15 || balls[i].position.y >= window_height/20 - 15) {
+        if (balls[i].position.y <= roomYmin || balls[i].position.y >= roomYmax) {
             balls[i].velocity.y = -balls[i].oldvelocity.y;
         }
-        if (balls[i].position.z <= -180 || balls[i].position.z >= 180) {
+        if (balls[i].position.z <= roomZmin || balls[i].position.z >= roomZmax) {
             balls[i].velocity.z = -balls[i].velocity.z;
         }
         
-        // Reposition balls if they're past border
+        // reposition balls if they're past border
         borderRepos(i);
     }
 }
@@ -349,7 +387,7 @@ void collide() {
     }
 }
 
-void bend(float deltaside) {
+void bend() {
     for (int i = 0; i < numballs; i++) {
         if (balls[i].position.x < (lx - camx) + 1 || balls[i].position.z >  (lz - camz)  - 1) {
             balls[i].velocity = {0,0,0};
@@ -357,12 +395,12 @@ void bend(float deltaside) {
         
         balls[i].oldvelocity = balls[i].velocity;
         
-        // Displacement between the box and the balls
+        // displacement between the box and the balls
         float dx = (camx + 360 * lx)/2  - balls[i].oldposition.x;
-        float dy = 1.0f - balls[i].oldposition.y;
-        float dz = (camz + 360 * lz)/2 + 75 - balls[i].oldposition.z;
+        float dy = (1.0f + 360 * ly)/2 - balls[i].oldposition.y;
+        float dz = (camz + 360 * lz)/2 + 90 - balls[i].oldposition.z;
         
-        // Change the direction of the balls to be attracted to a point
+        // change the direction of the balls to be attracted to a point
         balls[i].velocity = {dx/dt*10, dy/dt*10, dz/dt*10};
     };
 }
@@ -384,66 +422,65 @@ void makewalls() {
     
     // front wall
     glColor3f(0.9, 0.9, 0.9);
-    glVertex3f(roomXmin, -window_height/20 + 15, -180.0f);
+    glVertex3f(roomXmin, roomYmin, roomZmin);
     glColor3f(0.9, 0.9, 0.9);
-    glVertex3f(roomXmax, -window_height/20 + 15,  -180.0f);
+    glVertex3f(roomXmax, roomYmin,  roomZmin);
     glColor3f(0.5, 0.5, 0.5);
-    glVertex3f(roomXmax, window_height/20 + 15,  -180.0f);
+    glVertex3f(roomXmax, roomYmax,  roomZmin);
     glColor3f(0.5, 0.5, 0.5);
-    glVertex3f(roomXmin, window_height/20 + 15, -180.0f);
+    glVertex3f(roomXmin, roomYmax, roomZmin);
 	glEnd();
     
     // side wall
     glBegin(GL_QUADS);
-    glVertex3f(roomXmax, -window_height/20 + 15, -180.0f);
-    glVertex3f(roomXmax, -window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmax, window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmax, window_height/20 + 15, -180.0f);
+    glVertex3f(roomXmax, roomYmin, roomZmin);
+    glVertex3f(roomXmax, roomYmin,  roomZmax);
+    glVertex3f(roomXmax, roomYmax,  roomZmax);
+    glVertex3f(roomXmax, roomYmax, roomZmin);
 	glEnd();
     
     // side wall
     glBegin(GL_QUADS);
-    glVertex3f(roomXmin, -window_height/20 + 15, -180.0f);
-    glVertex3f(roomXmin, -window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmin, window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmin, window_height/20 + 15, -180.0f);
+    glVertex3f(roomXmin, roomYmin, roomZmin);
+    glVertex3f(roomXmin, roomYmin,  roomZmax);
+    glVertex3f(roomXmin, roomYmax,  roomZmax);
+    glVertex3f(roomXmin, roomYmax, roomZmin);
 	glEnd();
     
     // back wall
     glBegin(GL_QUADS);
     glColor3f(0.9, 0.9, 0.9);
-    glVertex3f(roomXmin, -window_height/20 + 15, 180.0f);
+    glVertex3f(roomXmin, roomYmin, roomZmax);
     glColor3f(0.9, 0.9, 0.9);
-    glVertex3f(roomXmax, -window_height/20 + 15,  180.0f);
+    glVertex3f(roomXmax, roomYmin,  roomZmax);
     glColor3f(0.5, 0.5, 0.5);
-    glVertex3f(roomXmax, window_height/20 + 15,  180.0f);
+    glVertex3f(roomXmax, roomYmax,  roomZmax);
     glColor3f(0.5, 0.5, 0.5);
-    glVertex3f(roomXmin, window_height/20 + 15, 180.0f);
+    glVertex3f(roomXmin, roomYmax, roomZmax);
 	glEnd();
     
     // floor
     glBegin(GL_QUADS);
     glColor3f(0.2, 0.2, 0.2);
-    glVertex3f(roomXmin, -window_height/20 + 15, -180.0f);
-    glVertex3f(roomXmin, -window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmax, -window_height/20 + 15,  180.0f);
-    glVertex3f(roomXmax, -window_height/20 + 15, -180.0f);
+    glVertex3f(roomXmin, roomYmin, roomZmin);
+    glVertex3f(roomXmin, roomYmin,  roomZmax);
+    glVertex3f(roomXmax, roomYmin,  roomZmax);
+    glVertex3f(roomXmax, roomYmin, roomZmin);
     glEnd();
 }
 
 void makeball(TObject3D ball) {
-    // Draw a sphere
     if (crazy) {
         
         glColor3f(ball.velocity.x/10 + 0.5 , ball.velocity.y/10 + 0.5, ball.velocity.z/10 + 0.5);
     }
     else {
-    if (ball.velocity.y < 0) {
-        glColor3f(0, -ball.velocity.y/10 + 0.1, -ball.velocity.y/10 + 0.5);
+        if (ball.velocity.y < 0) {
+            glColor3f(0, -ball.velocity.y/10 + 0.1, -ball.velocity.y/10 + 0.5);
         }
-    else {
-    glColor3f(0, ball.velocity.y/10 + 0.1, ball.velocity.y/10 + 0.5);
-    }
+        else {
+            glColor3f(0, ball.velocity.y/10 + 0.1, ball.velocity.y/10 + 0.5);
+        }
     }
     glPushMatrix();
     glTranslatef(ball.position.x, ball.position.y, ball.position.z);
@@ -452,7 +489,6 @@ void makeball(TObject3D ball) {
 }
 
 void makecubes() {
-    // Draw 2 cubes
     glLoadIdentity();
     glPushMatrix();
     glTranslatef(-7, -5, -20);
@@ -469,28 +505,23 @@ void makecubes() {
 }
 
 void display() {
-    
     computePos(deltaForwardMove, deltaSideMove);
-    
-    if(deltaAngle){
-        computeDir(deltaAngle);
+    if(deltaAnglex){
+        computeDir(deltaAnglex, deltaAngley);
     }
-    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // Load identity matrix
     glLoadIdentity();
     gluLookAt(camx,     1.0f,   camz,
-              camx+lx,  1.0f,   camz+lz,
+              camx+lx,  1.0+ly,   camz+lz,
               0.0f,     1.0f,   0.0f);
     makelighting();
     makewalls();
+    
+    // make balls
     for (int i = 0; i < numballs; i++) {
         makeball(balls[i]);
     }
     makecubes();
-    
-    // Swap buffers (color buffers, makes previous render visible)
     glutSwapBuffers();
 }
 
@@ -533,38 +564,46 @@ void processNormalKeys (unsigned char key, int x, int y) {
         case 'n':
             crazy = false;
             normal = true;
+            break;
         default:
             break;
     }
 }
 
 void mouseMove(int x, int y){
+    
     // this will only be true when the left button is down
     if (xOrigin >= 0) {
         
 		// update deltaAngle
-		deltaAngle = (x - xOrigin) * 0.0005f;
+		deltaAnglex = (x - xOrigin) * 0.0005f;
+        deltaAngley = (y - yOrigin) * 0.0001f;
         
         // bend that shit
         for (int i = 0; i < numballs; i++) {
             balls[i].tempvelocity = balls[i].oldvelocity;
         }
-        bend(deltaAngle);
+        bend();
 	}
 }
 
 void mouseButton(int button, int state, int x, int y) {
+    
     // only start motion if the left button is pressed
 	if (button == GLUT_LEFT_BUTTON) {
         
 		// when the button is released
 		if (state == GLUT_UP) {
-			angle += deltaAngle;
+			anglex += deltaAnglex;
+            angley += deltaAngley;
 			xOrigin = -1;
-            deltaAngle = 0;
+            yOrigin = -1;
+            deltaAnglex = 0;
+            deltaAngley = 0;
 		}
 		else  {
 			xOrigin = x;
+            yOrigin = y;
 		}
 	}
 }
@@ -590,7 +629,6 @@ void idle () {
     }
 }
 
-// Initialze OpenGL perspective matrix
 void GL_Setup(int width, int height) {
     glMatrixMode(GL_PROJECTION);
     glEnable(GL_DEPTH_TEST);
@@ -599,28 +637,19 @@ void GL_Setup(int width, int height) {
     glMatrixMode(GL_MODELVIEW);
 }
 
-// Initialize GLUT and start main loop
 int main(int argc, char** argv) {
-    
-    // Set up initial positions and velocities for each ball
     initialize();
-    
     glutInit(&argc, argv);
     glutInitWindowSize(window_width, window_height);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
     glutCreateWindow("Falling Ball");
-    
     glutDisplayFunc(display);
     glutIdleFunc(idle);
-    
     GL_Setup(window_width, window_height);
-    
     glutKeyboardFunc(processNormalKeys);
 	glutSpecialFunc(processSpecialKeys);
     glutSpecialUpFunc(releaseSpecialKey);
-    
     glutMouseFunc(mouseButton);
     glutMotionFunc(mouseMove);
-    
     glutMainLoop();
 }
